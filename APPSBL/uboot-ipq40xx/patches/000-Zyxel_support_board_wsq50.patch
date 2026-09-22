@@ -1,0 +1,136 @@
+Index: uboot-1.0-2012.07/arch/arm/include/asm/mach-types.h
+===================================================================
+--- uboot-1.0-2012.07.orig/arch/arm/include/asm/mach-types.h
++++ uboot-1.0-2012.07/arch/arm/include/asm/mach-types.h
+@@ -1135,6 +1135,7 @@ extern unsigned int __machine_arch_type;
+ #define MACH_TYPE_IPQ40XX_DB_DK01_1_C1	0x1010002
+ #define MACH_TYPE_IPQ40XX_DB_DK02_1_C1	0x1010003
+ #define MACH_TYPE_IPQ40XX_TB832		0x1010004
++#define MACH_TYPE_IPQ40XX_WSQ50		0x8030001
+ 
+ #ifdef CONFIG_ARCH_EBSA110
+ # ifdef machine_arch_type
+Index: uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_board_param.h
+===================================================================
+--- uboot-1.0-2012.07.orig/board/qcom/ipq40xx_cdp/ipq40xx_board_param.h
++++ uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_board_param.h
+@@ -1016,6 +1016,22 @@ gpio_func_data_t uart2_gpio[] = {
+ };
+ 
+ #ifdef CONFIG_IPQ40XX_I2C
++#ifdef CONFIG_WSQ50_I2C
++gpio_func_data_t i2c0_gpio[] = {
++	{
++		.gpio = 58,
++		.func = 3,
++		.pull = GPIO_NO_PULL,
++		.oe = GPIO_OE_ENABLE
++	},
++	{
++		.gpio = 59,
++		.func = 2,
++		.pull = GPIO_NO_PULL,
++		.oe = GPIO_OE_ENABLE
++	},
++};
++#else
+ gpio_func_data_t i2c0_gpio[] = {
+ 	{
+ 		.gpio = 20,
+@@ -1031,6 +1047,7 @@ gpio_func_data_t i2c0_gpio[] = {
+ 	},
+ };
+ #endif
++#endif
+ 
+ uart_cfg_t uart1_console_uart_dk01 = {
+ 	.uart_dm_base = UART1_DM_BASE,
+@@ -1301,6 +1318,37 @@ board_ipq40xx_params_t board_params[] =
+ 		.mtdids = "nand0=nand0,nand2=spi0.0",
+ 		.spi_nor_gpio = spi_nor_bga,
+ 		.spi_nor_gpio_count = ARRAY_SIZE(spi_nor_bga),
++		.nand_gpio = nand_gpio_bga,
++		.nand_gpio_count = ARRAY_SIZE(nand_gpio_bga),
++		.sw_gpio = sw_gpio_bga,
++		.sw_gpio_count = ARRAY_SIZE(sw_gpio_bga),
++		.edma_cfg = {
++			ipq40xx_edma_cfg(0, 5, PSGMII,
++					0, 1, 2, 3, 4)
++		},
++		.uart_cfg = &uart2,
++		.console_uart_cfg = &uart1_console_uart_dk04,
++#ifdef CONFIG_IPQ40XX_I2C
++		.i2c_cfg = &i2c0,
++#endif
++		.mmc_gpio = mmc_ap_dk04,
++		.mmc_gpio_count = ARRAY_SIZE(mmc_ap_dk04),
++		.spi_nand_available = 0,
++		.nor_nand_available = 0,
++		.nor_emmc_available = 0,
++#ifdef CONFIG_IPQ40XX_PCI
++		.pcie_cfg = {
++			pcie_board_cfg(0),
++		},
++#endif
++		.dtb_config_name = { "config@1", "config@ap.dk04.1-c1" },
++	},
++	{
++		.machid = MACH_TYPE_IPQ40XX_WSQ50,
++		.ddr_size = (512 << 20),
++		.mtdids = "nand0=nand0,nand2=spi0.0",
++		.spi_nor_gpio = spi_nor_bga,
++		.spi_nor_gpio_count = ARRAY_SIZE(spi_nor_bga),
+ 		.nand_gpio = nand_gpio_bga,
+ 		.nand_gpio_count = ARRAY_SIZE(nand_gpio_bga),
+ 		.sw_gpio = sw_gpio_bga,
+Index: uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_cdp.c
+===================================================================
+--- uboot-1.0-2012.07.orig/board/qcom/ipq40xx_cdp/ipq40xx_cdp.c
++++ uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_cdp.c
+@@ -609,6 +609,7 @@ int board_eth_init(bd_t *bis)
+ 	case MACH_TYPE_IPQ40XX_AP_DK04_1_C1:
+ 	case MACH_TYPE_IPQ40XX_AP_DK04_1_C3:
+ 	case MACH_TYPE_IPQ40XX_AP_DK04_1_C5:
++	case MACH_TYPE_IPQ40XX_WSQ50:
+ 		mdelay(1);
+ 		writel(GPIO_OUT, GPIO_IN_OUT_ADDR(47));
+ 		ipq40xx_register_switch(ipq40xx_qca8075_phy_init);
+Index: uboot-1.0-2012.07/boards.cfg
+===================================================================
+--- uboot-1.0-2012.07.orig/boards.cfg
++++ uboot-1.0-2012.07/boards.cfg
+@@ -207,6 +207,7 @@ integratorap_cm946es         arm
+ integratorcp_cm946es         arm         arm946es    integrator          armltd         -               integratorcp:CM946ES
+ ipq806x_cdp                  arm         armv7       ipq806x_cdp         qcom           ipq
+ ipq40xx_cdp                  arm         armv7       ipq40xx_cdp         qcom           qca
++wsq50                         arm         armv7       ipq40xx_cdp         qcom           qca
+ ca9x4_ct_vxp                 arm         armv7       vexpress            armltd
+ am335x_evm                   arm         armv7       am335x              ti             am33xx
+ highbank                     arm         armv7       highbank            -              highbank
+Index: uboot-1.0-2012.07/drivers/net/ipq40xx/ipq40xx_ess_sw.c
+===================================================================
+--- uboot-1.0-2012.07.orig/drivers/net/ipq40xx/ipq40xx_ess_sw.c
++++ uboot-1.0-2012.07/drivers/net/ipq40xx/ipq40xx_ess_sw.c
+@@ -78,6 +78,7 @@ int ipq40xx_ess_sw_init(ipq40xx_edma_boa
+ 	case MACH_TYPE_IPQ40XX_AP_DK06_1_C1:
+ 	case MACH_TYPE_IPQ40XX_AP_DK07_1_C1:
+ 	case MACH_TYPE_IPQ40XX_AP_DK07_1_C2:
++	case MACH_TYPE_IPQ40XX_WSQ50:
+ 
+ 		ipq40xx_ess_sw_wr(S17_P0LOOKUP_CTRL_REG, 0x140000);
+ 		ipq40xx_ess_sw_wr(S17_P1LOOKUP_CTRL_REG, 0x140000);
+Index: uboot-1.0-2012.07/mkconfig
+===================================================================
+--- uboot-1.0-2012.07.orig/mkconfig
++++ uboot-1.0-2012.07/mkconfig
+@@ -169,6 +169,10 @@ echo "#define CONFIG_SYS_BOARD \"${board
+ 
+ [ "${soc}"    ] && echo "#define CONFIG_SYS_SOC    \"${soc}\""    >> config.h
+ 
++TMP_NAME=`echo ${CONFIG_NAME} | sed 's/./\U&/g'`
++echo "#define CONFIG_BOARD_${TMP_NAME} 1" >> config.h
++echo "#define CONFIG_BOARD_NAME \"${TMP_NAME}\"" >> config.h
++
+ cat << EOF >> config.h
+ #define CONFIG_BOARDDIR board/$BOARDDIR
+ #include <config_cmd_defaults.h>

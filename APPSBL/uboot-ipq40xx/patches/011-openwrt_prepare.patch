@@ -1,0 +1,244 @@
+Index: uboot-1.0-2012.07/arch/arm/cpu/armv7/qca/cmd_bootqca.c
+===================================================================
+--- uboot-1.0-2012.07.orig/arch/arm/cpu/armv7/qca/cmd_bootqca.c
++++ uboot-1.0-2012.07/arch/arm/cpu/armv7/qca/cmd_bootqca.c
+@@ -39,6 +39,10 @@ extern board_ipq40xx_params_t *gboard_pa
+ static qca_mmc *host = &mmc_host;
+ #endif
+ 
++#ifndef CONFIG_QCA_MMC
++#error "no CONFIG_QCA_MMC !!!!"
++#endif
++
+ typedef struct {
+ 	unsigned int image_type;
+ 	unsigned int header_vsn_num;
+@@ -96,37 +100,68 @@ static int set_fs_bootargs(int *fs_on_na
+ #define nand_rootfs	"ubi.mtd=" QCA_ROOT_FS_PART_NAME " root=mtd:ubi_rootfs rootfstype=squashfs"
+ 
+ 	if (sfi->flash_type == SMEM_BOOT_SPI_FLASH) {
++		if (debug)
++			printf("set_fs_bootargs - sfi->flash_type == SMEM_BOOT_SPI_FLASH\n");
+ 		if (((sfi->rootfs.offset == 0xBAD0FF5E) &&
+ 		(gboard_param->nor_emmc_available == 0)) ||
+ 			get_which_flash_param("rootfs")) {
++			if (debug)
++				printf("\t1\n");
+ 			bootargs = nand_rootfs;
+ 			*fs_on_nand = 1;
+ 			gboard_param->nor_nand_available = 1;
+ 			if (getenv("fsbootargs") == NULL)
+ 				setenv("fsbootargs", bootargs);
+ 		} else {
++			if (debug)
++				printf("\t2\n");
+ 			if (smem_bootconfig_info() == 0) {
++				if (debug)
++					printf("\tsmem available\n");
+ 				active_part = get_rootfs_active_partition();
+ 				if (active_part) {
++#ifdef CONFIG_QCA_MMC
++					bootargs = "root=/dev/mmcblk0p4";
++#else
+ 					bootargs = "rootfsname=rootfs_1";
++#endif
+ 				} else {
++#ifdef CONFIG_QCA_MMC
++					bootargs = "root=/dev/mmcblk0p3";
++#else
+ 					bootargs = "rootfsname=rootfs";
++#endif
+ 				}
+ 			} else {
++				if (debug)
++					printf("\tsmem not available\n");
++#ifdef CONFIG_QCA_MMC
++				bootargs = "root=/dev/mmcblk0p3";
++#else
+ 				bootargs = "rootfsname=rootfs";
++#endif
+ 			}
+ 			*fs_on_nand = 0;
++#ifndef CONFIG_QCA_MMC
+ 			if (getenv("fsbootargs") == NULL)
+ 				setenv("fsbootargs", bootargs);
++#else
++			setenv("fsbootargs", bootargs);
++#endif
+ 		}
+ 	} else if (sfi->flash_type == SMEM_BOOT_NAND_FLASH) {
++		if (debug)
++			printf("set_fs_bootargs - sfi->flash_type == SMEM_BOOT_NAND_FLASH\n");
+ 		bootargs = nand_rootfs;
+ 		if (getenv("fsbootargs") == NULL)
+ 			setenv("fsbootargs", bootargs);
+ 		*fs_on_nand = 1;
+ #ifdef CONFIG_QCA_MMC
+ 	} else if (sfi->flash_type == SMEM_BOOT_MMC_FLASH) {
++		printf("set_fs_bootargs - sfi->flash_type == SMEM_BOOT_MMC_FLASH\n");
+ 		if (smem_bootconfig_info() == 0) {
++			if (debug)
++				printf("\tsmem available\n");
+ 			active_part = get_rootfs_active_partition();
+ 			if (active_part) {
+ 				bootargs = "rootfsname=rootfs_1";
+@@ -134,6 +169,8 @@ static int set_fs_bootargs(int *fs_on_na
+ 				bootargs = "rootfsname=rootfs";
+ 			}
+ 		} else {
++			if (debug)
++				printf("\tsmem not available\n");
+ 			bootargs = "rootfsname=rootfs";
+ 		}
+ 
+@@ -146,7 +183,11 @@ static int set_fs_bootargs(int *fs_on_na
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef CONFIG_QCA_MMC
++	return run_command("setenv bootargs ${fsbootargs} rootwait", 0);
++#else
+ 	return run_command("setenv bootargs ${bootargs} ${fsbootargs} rootwait", 0);
++#endif
+ }
+ 
+ int config_select(unsigned int addr, const char **config, char *rcmd, int rcmd_size)
+@@ -412,6 +453,8 @@ static int do_boot_unsignedimg(cmd_tbl_t
+ 	if (debug) {
+ 		run_command("printenv bootargs", 0);
+ 		printf("Booting from flash\n");
++		printf("sfi->flash_type = %u\n", sfi->flash_type);
++		printf("gboard_param->nor_emmc_available = %u\n", gboard_param->nor_emmc_available);
+ 	}
+ 
+ 	if (sfi->flash_type == SMEM_BOOT_NAND_FLASH) {
+@@ -436,6 +479,8 @@ static int do_boot_unsignedimg(cmd_tbl_t
+ 			CONFIG_SYS_LOAD_ADDR);
+ 
+ 	} else if ((sfi->flash_type == SMEM_BOOT_SPI_FLASH) && (gboard_param->nor_emmc_available == 0)) {
++		if (debug)
++			printf("Using SMEM_BOOT_SPI_FLASH and nor_emmc_available == 0\n");
+ 		if ((sfi->rootfs.offset == 0xBAD0FF5E) ||
+ 			get_which_flash_param("rootfs")) {
+ 			if (sfi->rootfs.offset == 0xBAD0FF5E) {
+@@ -470,13 +515,24 @@ static int do_boot_unsignedimg(cmd_tbl_t
+ 		}
+ 		blk_dev = mmc_get_dev(host->dev_num);
+ 		if (smem_bootconfig_info() == 0) {
++			if (debug) {
++				printf("smem available\n");
++			}
+ 			active_part = get_rootfs_active_partition();
+ 			if (active_part) {
++				if (debug)
++					printf("\tactive_part = 0:HLOS_1\n");
+ 				ret = find_part_efi(blk_dev, "0:HLOS_1", &disk_info);
+ 			} else {
++				if (debug)
++					printf("\tactive_part = 0:HLOS\n");
+ 				ret = find_part_efi(blk_dev, "0:HLOS", &disk_info);
+ 			}
+ 		} else {
++			if (debug) {
++				printf("smem not available\n");
++				printf("\tactive_part = 0:HLOS\n");
++			}
+ 			ret = find_part_efi(blk_dev, "0:HLOS", &disk_info);
+ 		}
+ 
+@@ -484,6 +540,8 @@ static int do_boot_unsignedimg(cmd_tbl_t
+ 			snprintf(runcmd, sizeof(runcmd), "mmc read 0x%x 0x%x 0x%x",
+ 					CONFIG_SYS_LOAD_ADDR,
+ 					(uint)disk_info.start, (uint)disk_info.size);
++		} else {
++			printf("Fail to find kernel active_part\n");
+ 		}
+ 
+ #endif   	/* CONFIG_QCA_MMC   */
+@@ -503,8 +561,14 @@ static int do_boot_unsignedimg(cmd_tbl_t
+ 
+ 	ret = genimg_get_format((void *)CONFIG_SYS_LOAD_ADDR);
+ 	if (ret == IMAGE_FORMAT_FIT) {
++#if 0
+ 		ret = config_select(CONFIG_SYS_LOAD_ADDR, gboard_param->dtb_config_name,
+ 				runcmd, sizeof(runcmd));
++#else
++#define CONFIG_NAME "config@ap.wsq50"
++		snprintf(runcmd, sizeof(runcmd),
++			"bootm 0x%x#%s\n", CONFIG_SYS_LOAD_ADDR, CONFIG_NAME);
++#endif
+ 	} else if (ret == IMAGE_FORMAT_LEGACY) {
+ 		snprintf(runcmd, sizeof(runcmd),
+ 			"bootm 0x%x\n", CONFIG_SYS_LOAD_ADDR);
+Index: uboot-1.0-2012.07/include/configs/ipq40xx_cdp.h
+===================================================================
+--- uboot-1.0-2012.07.orig/include/configs/ipq40xx_cdp.h
++++ uboot-1.0-2012.07/include/configs/ipq40xx_cdp.h
+@@ -274,6 +274,7 @@ typedef struct {
+ 
+ #define CONFIG_QCA_APPSBL_DLOAD	1
+ 
++#undef CONFIG_QCA_APPSBL_DLOAD
+ #ifdef CONFIG_QCA_APPSBL_DLOAD
+ #define CONFIG_CMD_TFTPPUT
+ /* We will be uploading very big files */
+@@ -289,7 +290,6 @@ typedef struct {
+ #define CONFIG_SYS_MAX_NAND_DEVICE	(CONFIG_IPQ_MAX_NAND_DEVICE + \
+ 					 CONFIG_IPQ_MAX_SPI_DEVICE)
+ 
+-#if 0//Fanning.2015/11/13 it will define by project.h
+ #define CONFIG_QCA_MMC
+ 
+ #ifdef CONFIG_QCA_MMC
+@@ -300,7 +300,6 @@ typedef struct {
+ #define CONFIG_ENV_IS_IN_MMC
+ #define CONFIG_SYS_MMC_ENV_DEV  0
+ #endif
+-#endif
+ 
+ #define CONFIG_MTD_DEVICE
+ #define CONFIG_MTD_PARTITIONS
+Index: uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_board_param.h
+===================================================================
+--- uboot-1.0-2012.07.orig/board/qcom/ipq40xx_cdp/ipq40xx_board_param.h
++++ uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_board_param.h
+@@ -1366,7 +1366,7 @@ board_ipq40xx_params_t board_params[] =
+ 		.mmc_gpio_count = ARRAY_SIZE(mmc_ap_dk04),
+ 		.spi_nand_available = 0,
+ 		.nor_nand_available = 0,
+-		.nor_emmc_available = 0,
++		.nor_emmc_available = 1,
+ #ifdef CONFIG_IPQ40XX_PCI
+ 		.pcie_cfg = {
+ 			pcie_board_cfg(0),
+Index: uboot-1.0-2012.07/include/_exports.h
+===================================================================
+--- uboot-1.0-2012.07.orig/include/_exports.h
++++ uboot-1.0-2012.07/include/_exports.h
+@@ -74,4 +74,6 @@ EXPORT_FUNC(zmmc_init)
+ EXPORT_FUNC(zmmc_read)
+ EXPORT_FUNC(zmmc_write)
+ EXPORT_FUNC(zmmc_erase)
++#ifdef CONFIG_PRODUCT_TEST
+ EXPORT_FUNC(product_test)
++#endif
+Index: uboot-1.0-2012.07/include/configs/wsq50.h
+===================================================================
+--- uboot-1.0-2012.07.orig/include/configs/wsq50.h
++++ uboot-1.0-2012.07/include/configs/wsq50.h
+@@ -570,7 +570,7 @@ typedef struct {
+     "addmtd=setenv bootargs ${bootargs} ${mtdparts}\0" \
+     BOOT_MMC_CMD \
+     BOOT_MMC_CMD_1 \
+-    "bootcmd=run boot_mmc\0" \
++    "bootcmd=bootipq\0" \
+     "bootcmd_1=run boot_mmc_1\0" \
+     IMG_ENV_VAL \
+     UPGRADE_IMG_CMD \
+@@ -580,6 +580,4 @@ typedef struct {
+ //----------------------------------------------------//
+ 
+ 
+-#define CONFIG_PRODUCT_TEST
+-
+ #endif /* _IPQCDP_H */

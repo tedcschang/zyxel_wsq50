@@ -1,0 +1,110 @@
+From 02a7493bce7c1b087f1c353955d3d38bdb830887 Mon Sep 17 00:00:00 2001
+From: Joseph Chen <phenomenon0102@gmail.com>
+Date: Sat, 6 May 2017 22:32:56 +0800
+Subject: [PATCH 1/1] product test mode
+
+---
+ common/Makefile           |  1 +
+ common/cmd_product_test.c | 48 +++++++++++++++++++++++++++++++++++++++++++++++
+ common/env_common.c       |  7 +++++++
+ common/main.c             |  3 ++-
+ include/configs/wsq50.h   |  9 ++++++---
+ net/ping.c                |  2 +-
+ 6 files changed, 65 insertions(+), 5 deletions(-)
+ create mode 100644 common/cmd_product_test.c
+
+Index: uboot-1.0-2012.07/common/Makefile
+===================================================================
+--- uboot-1.0-2012.07.orig/common/Makefile
++++ uboot-1.0-2012.07/common/Makefile
+@@ -154,6 +154,7 @@ COBJS-$(CONFIG_CMD_UBI) += cmd_ubi.o
+ COBJS-$(CONFIG_CMD_UBIFS) += cmd_ubifs.o
+ COBJS-$(CONFIG_CMD_UNIVERSE) += cmd_universe.o
+ COBJS-$(CONFIG_CMD_UNZIP) += cmd_unzip.o
++COBJS-$(CONFIG_PRODUCT_TEST) += cmd_product_test.o
+ ifdef CONFIG_CMD_USB
+ COBJS-y += cmd_usb.o
+ COBJS-y += usb.o usb_hub.o
+Index: uboot-1.0-2012.07/common/cmd_product_test.c
+===================================================================
+--- /dev/null
++++ uboot-1.0-2012.07/common/cmd_product_test.c
+@@ -0,0 +1,55 @@
++#include <common.h>
++#include <command.h>
++#include <linux/compiler.h>
++
++int product_test()
++{
++    char *s, *serverip;
++    char runcmd[256];
++    int product_test_mode = 0;
++    int ret = -1;
++    int count = 1;
++    char *file_name;
++    int ping_retry = 3;
++
++    s = getenv ("bootmode");
++    if ( s != NULL )
++        product_test_mode = 1;
++
++    s = getenv ("product_test_ping_retry");
++    ping_retry = s ? (int)simple_strtol(s, NULL, 10) : 3;
++
++    if (product_test_mode == 1) {
++        printf("==== PRODUCT TEST MODE ====\n");
++
++        serverip = getenv("serverip");
++        printf("Server IP is %s\n", serverip);
++        snprintf(runcmd, sizeof(runcmd), "ping %s", serverip);
++        while( (ret = run_command(runcmd, 0)) != 0) {
++            printf("return value is %d\n", ret);
++            count ++;
++            mdelay(500);
++            if(count > ping_retry) {
++                printf("can't run product test...\n");
++                return 1;
++            }
++        }
++
++        file_name = getenv("product_test_file");
++        snprintf(runcmd, sizeof(runcmd), "tftpboot 0x88000000 %s && bootm 0x88000000", (file_name != NULL)? file_name: "zyxel-uImage.itb");
++        run_command(runcmd, 0);
++    } 
++    return 0;
++}
++
++int do_product_test (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
++{
++   return product_test();
++}
++
++U_BOOT_CMD(
++    product_test,    3,    0,    do_product_test,
++    "do the product test\n",
++    "do the product test"
++);
++
+Index: uboot-1.0-2012.07/include/_exports.h
+===================================================================
+--- uboot-1.0-2012.07.orig/include/_exports.h
++++ uboot-1.0-2012.07/include/_exports.h
+@@ -74,3 +74,4 @@ EXPORT_FUNC(zmmc_init)
+ EXPORT_FUNC(zmmc_read)
+ EXPORT_FUNC(zmmc_write)
+ EXPORT_FUNC(zmmc_erase)
++EXPORT_FUNC(product_test)
+Index: uboot-1.0-2012.07/include/exports.h
+===================================================================
+--- uboot-1.0-2012.07.orig/include/exports.h
++++ uboot-1.0-2012.07/include/exports.h
+@@ -62,6 +62,9 @@ int zmmc_init(void);
+ int zmmc_read(unsigned long blk, unsigned long cnt, char *buf);
+ int zmmc_write(unsigned long blk, unsigned long cnt, char *buf);
+ int zmmc_erase(unsigned long blk, unsigned long cnt);
++#ifdef CONFIG_PRODUCT_TEST
++int product_test(void);
++#endif
+ #endif
+ 
+ enum {
