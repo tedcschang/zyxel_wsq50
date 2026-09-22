@@ -1,0 +1,16 @@
+#!/bin/bash
+# Thanks to openwrt commit 82618062
+# http://www.adslayuda.com/Zyxel650-9.html authors
+
+ror32() {
+	echo $(( ($1 >> $2) | (($1 << (32 - $2) & (2**32-1)) ) ))
+}
+
+v="0x$1"
+a="0x${v:2:6}"
+b=$(( $a + 0x10F0A563))
+c=$(( 0x${v:12:14} & 7 ))
+p=$(( $(ror32 $b $c) ^ $a ))
+
+printf "ATEN 1,%X\n" $p
+
