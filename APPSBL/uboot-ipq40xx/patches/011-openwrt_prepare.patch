@@ -242,3 +242,17 @@ Index: uboot-1.0-2012.07/include/configs/wsq50.h
 -#define CONFIG_PRODUCT_TEST
 -
  #endif /* _IPQCDP_H */
+Index: uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_cdp.c
+===================================================================
+--- uboot-1.0-2012.07.orig/board/qcom/ipq40xx_cdp/ipq40xx_cdp.c
++++ uboot-1.0-2012.07/board/qcom/ipq40xx_cdp/ipq40xx_cdp.c
+@@ -585,7 +585,8 @@ static void ipq40xx_set_ethmac_addr(void
+ 					mac_addr[0], mac_addr[1],
+ 					mac_addr[2], mac_addr[3],
+ 					mac_addr[4], mac_addr[5]);
+-			setenv(ethaddr, mac);
++			if (getenv("use_ethaddr_from_art"))
++				setenv(ethaddr, mac);
+ 		}
+ 		snprintf(ethaddr, sizeof(ethaddr), "eth%daddr", (i + 1));
+ 	}
