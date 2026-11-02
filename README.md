@@ -50,6 +50,11 @@ This document provides step-by-step instructions for backing up factory partitio
    dd if=/dev/mtd5 of=/tmp/CRT.bin
    ```
 6. Insert your USB flash drive, copy `APPSBL.bin`, `ART.bin`, and `CRT.bin` to the drive, and store them safely.
+   ```sh
+   cp /tmp/APPSBL.bin /tmp/storage/usb1/usb1_3-1_1/
+   cp /tmp/ART.bin /tmp/storage/usb1/usb1_3-1_1/
+   cp /tmp/CRT.bin /tmp/storage/usb1/usb1_3-1_1/
+   ```
 
 ---
 
